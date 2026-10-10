@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "budgetgs"
+version = "0.1.0"
+description = "Training-time rate control for 3D Gaussian Splatting: train a scene onto an explicit byte budget."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Yuefan Zhang" }]
+dependencies = [
+    "torch>=2.0",
+    "gsplat>=1.4",
+    "numpy",
+    "scipy",
+    "matplotlib",
+]
+
+[project.scripts]
+budgetgs = "budgetgs.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["budgetgs"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 160
+target-version = "py312"
