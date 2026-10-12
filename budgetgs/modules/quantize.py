@@ -61,6 +61,12 @@ def quantize_group(values: list[list[float]], levels: int) -> tuple[ScaleTable, 
     """
     if not values:
         raise ValueError("quantize_group: empty attribute block")
+    if not isinstance(values[0], (list, tuple)):
+        # Single-channel flat stream (e.g. opacity from a (N,) checkpoint tensor).
+        values = [[v] for v in values]
+    elif isinstance(values[0][0], (list, tuple)):
+        # 3-D blocks (SH coefficients (N, K, C)): flatten rows to (N*K, C).
+        values = [row for block in values for row in block]
     channels = len(values[0])
     if channels == 0:
         raise ValueError("quantize_group: attribute rows are empty")
