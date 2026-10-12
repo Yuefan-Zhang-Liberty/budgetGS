@@ -75,9 +75,22 @@ def train(args: argparse.Namespace) -> None:
 
 
 def fit(args: argparse.Namespace) -> None:
-    """Land a checkpoint on ``--budget-mb`` bytes by bisecting the quantization step."""
-    del args
-    _not_implemented('fit')
+    """Land a checkpoint on ``--budget-mb`` bytes by bisecting block precision."""
+    from .evaluation.fit import fit_levels
+    from .utils.ckpt import load_attributes
+
+    attributes = load_attributes(args.ckpt)
+    budget = int(args.budget_mb * 1_000_000)
+    result = fit_levels(attributes, budget, tolerance=args.tolerance)
+    print(
+        f'landed at levels={result.levels}: {result.bytes} bytes vs '
+        f'budget {result.budget} (err {result.error_bytes} B = '
+        f'{result.error_frac * 100:.3f}%)'
+    )
+    print(
+        f'evaluations: {result.evals} | tolerance met: '
+        f'{result.met_tolerance} | status: {result.status}'
+    )
 
 
 def ledger(args: argparse.Namespace) -> None:
