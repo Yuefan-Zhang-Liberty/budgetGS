@@ -137,13 +137,16 @@ def create_splats(scene, device: str = "cuda", sh_degree: int = 3, init_num_pts:
     return splats, optimizers
 
 
-def _load_image(path: str, device: str):
-    """Load one JPEG/PNG as a float tensor in [0, 1] with shape [1, H, W, 3]."""
+def _load_image(path: str, device: str, size: tuple | None = None):
+    """Load one JPEG/PNG as a float tensor in [0, 1] with shape [1, H, W, 3];
+    optionally resize to ``size=(width, height)`` to match the render size."""
     import numpy as np
     import torch
     from PIL import Image
 
     im = Image.open(path).convert("RGB")
+    if size is not None and im.size != tuple(size):
+        im = im.resize(tuple(size), Image.Resampling.BILINEAR)
     arr = np.asarray(im, dtype=np.float32) / 255.0
     return torch.from_numpy(arr).unsqueeze(0).to(device)
 
@@ -248,7 +251,7 @@ def train(
     c2w = torch.tensor(scene.camtoworlds, dtype=torch.float32, device=device).view(n_views, 4, 4)
     Ks = torch.tensor(scene.Ks, dtype=torch.float32, device=device).view(n_views, 3, 3)
     width, height = scene.width, scene.height
-    images = {i: _load_image(scene.image_paths[i], device) for i in range(n_views)}
+    images = {i: _load_image(scene.image_paths[i], device, size=(width, height)) for i in range(n_views)}
 
     splats, optimizers = create_splats(scene, device=device, sh_degree=sh_degree)
     from gsplat.strategy import DefaultStrategy
