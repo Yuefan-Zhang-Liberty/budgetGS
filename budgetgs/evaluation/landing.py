@@ -167,7 +167,7 @@ def analyze_landing(
                 rec_tot[k] += rm[k]
                 ref_tot[k] += fm[k]
         n = max(len(val_idcs), 1)
-        ref_avg = {k: round(rec_tot[k] / n, 4) for k in metric_names}
+        ref_avg = {k: round(ref_tot[k] / n, 4) for k in metric_names}
         rec_avg = {k: round(rec_tot[k] / n, 4) for k in metric_names}
     finally:
         del images, ref_splats, rec_splats

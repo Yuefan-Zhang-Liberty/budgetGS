@@ -78,6 +78,8 @@ def _sample_indices(n: int, k: int) -> list[int]:
         return []
     if k >= n:
         return list(range(n))
+    if k == 1:
+        return [0]
     idx = sorted({round(i * (n - 1) / (k - 1)) for i in range(k)})
     if idx[-1] != n - 1:
         idx[-1] = n - 1
@@ -94,7 +96,8 @@ def analyze_ckpt_dir(
     config = LedgerConfig(levels=levels)
 
     rows: list[dict] = []
-    for path in files:
+    for i, path in enumerate(files):
+        print(f"  ledger {i + 1}/{len(files)} {os.path.basename(path)}", flush=True)
         attributes = load_attributes(path)
         result = compute_ledger(attributes, config=config)
         n = len(attributes["means"])
@@ -110,6 +113,7 @@ def analyze_ckpt_dir(
 
     samples: list[dict] = []
     for i in _sample_indices(len(rows), sample):
+        print(f"  real-encode {os.path.basename(files[i])}", flush=True)
         path = files[i]
         attributes = load_attributes(path)
         predicted = compute_ledger(attributes, config=config).total_predicted_bytes

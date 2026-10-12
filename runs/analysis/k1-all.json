@@ -1,0 +1,65 @@
+[
+  {
+    "ckpt_dir": "runs/bicycle/bicycle_s0",
+    "n_checkpoints": 30,
+    "fit": {
+      "slope": 69.03869603382998,
+      "intercept": 2984315.5362131298,
+      "r2": 0.9972559882343861,
+      "worst_abs_bytes": 1966688.8330204226,
+      "worst_pct": 0.024754134217136875
+    },
+    "passes": true,
+    "samples": [
+      {
+        "ckpt": "ckpt-0001000.pt",
+        "n_gaussians": 102137,
+        "predicted": 8069032,
+        "actual": 8091248,
+        "err_pct": 0.2746
+      }
+    ]
+  },
+  {
+    "ckpt_dir": "runs/garden/garden_s0",
+    "n_checkpoints": 30,
+    "fit": {
+      "slope": 68.93681475342065,
+      "intercept": 1957723.5870165974,
+      "r2": 0.9930308367047305,
+      "worst_abs_bytes": 1636743.261088267,
+      "worst_pct": 0.027613322828754127
+    },
+    "passes": true,
+    "samples": [
+      {
+        "ckpt": "ckpt-0001000.pt",
+        "n_gaussians": 171479,
+        "predicted": 12710448,
+        "actual": 12771072,
+        "err_pct": 0.4747
+      }
+    ]
+  },
+  {
+    "ckpt_dir": "runs/room/room_s0",
+    "n_checkpoints": 30,
+    "fit": {
+      "slope": 58.39419698165719,
+      "intercept": 4389607.806154344,
+      "r2": 0.9905355357300937,
+      "worst_abs_bytes": 1948482.701248942,
+      "worst_pct": 0.05087225614386029
+    },
+    "passes": false,
+    "samples": [
+      {
+        "ckpt": "ckpt-0001000.pt",
+        "n_gaussians": 148527,
+        "predicted": 11114240,
+        "actual": 11162608,
+        "err_pct": 0.4333
+      }
+    ]
+  }
+]

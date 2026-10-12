@@ -1,0 +1,2 @@
+landed at levels=23: 9432424 bytes vs budget 10000000 (err 567576 B = 5.676%)
+evaluations: 17 | tolerance met: False | status: tolerance missed (neighbouring levels straddle the budget)
