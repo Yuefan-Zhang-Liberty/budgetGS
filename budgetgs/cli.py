@@ -1,7 +1,8 @@
 """Command-line interface for BudgetGS.
 
 The CLI exposes four commands: ``train``, ``fit``, ``ledger`` and ``serialize``.
-Phase 1 ships the argument contracts; the implementations land in later phases.
+``ledger`` and ``serialize`` are implemented (Week-1 core deliverable); ``train``
+and ``fit`` land in the following days.
 """
 
 from __future__ import annotations
@@ -35,10 +36,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     ledger_parser = subcommands.add_parser('ledger', help='predict the serialized size of a checkpoint')
     ledger_parser.add_argument('--ckpt', required=True, help='path to a trained checkpoint')
+    ledger_parser.add_argument('--levels', type=int, default=4096, help='quantization levels per attribute block')
 
     serialize_parser = subcommands.add_parser('serialize', help='write a checkpoint to disk and report bytes')
     serialize_parser.add_argument('--ckpt', required=True, help='path to a trained checkpoint')
     serialize_parser.add_argument('--out', required=True, help='output file path')
+    serialize_parser.add_argument('--levels', type=int, default=4096, help='quantization levels per attribute block')
 
     return parser
 
@@ -67,14 +70,28 @@ def fit(args: argparse.Namespace) -> None:
 
 def ledger(args: argparse.Namespace) -> None:
     """Print the predicted serialized size of a checkpoint, attribute by attribute."""
-    del args
-    _not_implemented('ledger')
+    from .modules.ledger import LedgerConfig, compute_ledger
+    from .utils.ckpt import load_attributes
+
+    attributes = load_attributes(args.ckpt)
+    result = compute_ledger(attributes, config=LedgerConfig(levels=args.levels))
+    print(f'predicted serialized size: {result.total_predicted_bytes} bytes (levels={args.levels})')
+    print(f'{"attribute":<10}{"symbols":>10}{"distinct":>9}{"code_bits":>14}{"bytes":>9}')
+    for entry in result.attributes:
+        print(
+            f'{entry.name:<10}{entry.n_symbols:>10}{entry.n_distinct:>9}'
+            f'{entry.code_bits:>14.1f}{entry.total_bytes:>9}'
+        )
 
 
 def serialize(args: argparse.Namespace) -> None:
     """Write a checkpoint to disk and print the actual byte count."""
-    del args
-    _not_implemented('serialize')
+    from .modules.serialize import write_container
+    from .utils.ckpt import load_attributes
+
+    attributes = load_attributes(args.ckpt)
+    n = write_container(args.out, attributes, levels=args.levels)
+    print(f'wrote {n} bytes to {args.out}')
 
 #---------------------------------------------------------------------
 # Entry point
