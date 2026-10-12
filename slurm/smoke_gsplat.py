@@ -20,10 +20,14 @@ def main() -> None:
 
     n_gaussians = 1024
     means = torch.randn(n_gaussians, 3, device=device) * 0.05
+    means.requires_grad_(True)
     scales = torch.rand(n_gaussians, 3, device=device) * 0.01 + 1e-3
+    scales.requires_grad_(True)
     quats = torch.randn(n_gaussians, 4, device=device)
     quats = quats / quats.norm(dim=-1, keepdim=True)
+    quats.requires_grad_(True)
     opacities = torch.sigmoid(torch.randn(n_gaussians, device=device))
+    opacities.requires_grad_(True)
     colors = torch.rand(n_gaussians, 3, device=device)
 
     width, height = 128, 128
