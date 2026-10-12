@@ -1,8 +1,8 @@
 """Command-line interface for BudgetGS.
 
 The CLI exposes four commands: ``train``, ``fit``, ``ledger`` and ``serialize``.
-``ledger`` and ``serialize`` are implemented (Week-1 core deliverable); ``train``
-and ``fit`` land in the following days.
+``train`` (Week-1 Day 3), ``ledger`` and ``serialize`` (Day 4) are
+implemented; ``fit`` (Day 5, block-precision bisection) lands next.
 """
 
 from __future__ import annotations
@@ -28,6 +28,11 @@ def build_parser() -> argparse.ArgumentParser:
     train_parser.add_argument('--steps', type=int, default=30000, help='number of training iterations')
     train_parser.add_argument('--ckpt-every', type=int, default=1000, help='checkpoint interval in iterations')
     train_parser.add_argument('--out', default='runs', help='output directory for checkpoints and logs')
+    train_parser.add_argument('--seed', type=int, default=0, help='random seed')
+    train_parser.add_argument('--factor', type=int, default=2, help='image downscale factor (images_{factor})')
+    train_parser.add_argument('--sh-degree', type=int, default=3, help='spherical harmonics degree')
+    train_parser.add_argument('--device', default='cuda', help='torch device')
+    train_parser.add_argument('--antialiased', action='store_true', help='antialiased rasterization')
 
     fit_parser = subcommands.add_parser('fit', help='fit a checkpoint onto a byte budget')
     fit_parser.add_argument('--ckpt', required=True, help='path to a trained checkpoint')
@@ -58,8 +63,15 @@ def _not_implemented(command_name: str) -> None:
 
 def train(args: argparse.Namespace) -> None:
     """Train a gsplat scene, checkpointing every ``--ckpt-every`` iterations."""
-    del args
-    _not_implemented('train')
+    # Imported lazily: the trainer needs torch/gsplat, the rest of the CLI
+    # (ledger/serialize) runs on the system python3.
+    from .modules.trainer import train as run_train
+
+    run_train(
+        args.scene, steps=args.steps, ckpt_every=args.ckpt_every, out=args.out,
+        seed=args.seed, factor=args.factor, sh_degree=args.sh_degree,
+        device=args.device, antialiased=args.antialiased,
+    )
 
 
 def fit(args: argparse.Namespace) -> None:
