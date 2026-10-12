@@ -30,7 +30,44 @@ import subprocess
 import sys
 
 _SH_C0 = 0.28209479177387814
-_SSIM_LAMBDA = 0.2
+
+
+def _l1_loss(pred, target):
+    """Mean absolute error over all pixels (drop-in for gsplat.losses.l1_loss)."""
+    import torch.nn.functional as F
+
+    return F.l1_loss(pred, target, reduction="mean")
+
+
+def _ssim_loss(img1, img2, window_size: int = 11, channel: int = 3):
+    """1 - SSIM (Wang et al. 2004), torch reference implementation matching
+    gsplat.losses.ssim_loss minus the fused-CUDA fast path. Used for optional
+    quality reporting; training loss is plain L1 for speed."""
+    import torch
+    import torch.nn.functional as F
+
+    def _gaussian_kernel_1d(size: int, sigma: float, device):
+        x = torch.arange(size, device=device, dtype=torch.float32)
+        gauss = torch.exp(-((x - size // 2) ** 2) / (2 * sigma ** 2))
+        return gauss / gauss.sum()
+
+    w1d = _gaussian_kernel_1d(window_size, 1.5, img1.device).unsqueeze(1)
+    w2d = (w1d.mm(w1d.t())).float().unsqueeze(0).unsqueeze(0)
+    window = w2d.expand(channel, 1, window_size, window_size).contiguous()
+    window = window.type_as(img1)
+
+    pad = window_size // 2
+    mu1 = F.conv2d(img1, window, padding=pad, groups=channel)
+    mu2 = F.conv2d(img2, window, padding=pad, groups=channel)
+    mu1_sq, mu2_sq, mu1_mu2 = mu1.pow(2), mu2.pow(2), mu1 * mu2
+    sigma1_sq = F.conv2d(img1 * img1, window, padding=pad, groups=channel) - mu1_sq
+    sigma2_sq = F.conv2d(img2 * img2, window, padding=pad, groups=channel) - mu2_sq
+    sigma12 = F.conv2d(img1 * img2, window, padding=pad, groups=channel) - mu1_mu2
+    c1, c2 = 0.01 ** 2, 0.03 ** 2
+    ssim_map = ((2 * mu1_mu2 + c1) * (2 * sigma12 + c2)) / (
+        (mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2)
+    )
+    return 1.0 - ssim_map.mean()
 
 
 def rgb_to_sh(rgb):
@@ -111,19 +148,19 @@ def _load_image(path: str, device: str):
     return torch.from_numpy(arr).unsqueeze(0).to(device)
 
 
-def _rasterize(splats, camtoworlds, Ks, width, height, view_idcs, device, antialiased):
+def _rasterize(splats, camtoworlds, Ks, width, height, view_idcs, device, antialiased, sh_degree=3):
     """Rasterize one or more views; returns ``(render_colors, render_alphas, info)``
     with ``render_colors`` in [C, H, W, 3]."""
     import torch
-    from gsplat.rendering import RasterizeMode, rasterization
+    from gsplat.rendering import rasterization
 
     colors = torch.cat([splats["sh0"], splats["shn"]], dim=1)
-    mode = RasterizeMode.ANTIALIASED if antialiased else RasterizeMode.CLASSIC
+    mode = "antialiased" if antialiased else "classic"
     render_colors, render_alphas, info = rasterization(
         means=splats["means"],
         quats=splats["quats"],
         scales=torch.exp(splats["scales"]),
-        opacities=torch.sigmoid(splats["opacities"]),
+        opacities=torch.sigmoid(splats["opacity"]),
         colors=colors,
         viewmats=torch.linalg.inv_ex(camtoworlds[view_idcs]).inverse,
         Ks=Ks[view_idcs],
@@ -134,6 +171,7 @@ def _rasterize(splats, camtoworlds, Ks, width, height, view_idcs, device, antial
         sparse_grad=False,
         rasterize_mode=mode,
         distributed=False,
+        sh_degree=sh_degree,
     )
     return render_colors, render_alphas, info
 
@@ -152,12 +190,12 @@ def _psnr(render: object, gt: object) -> float:
     return float(-10.0 * torch.log10(mse))
 
 
-def _evaluate(splats, camtoworlds, Ks, width, height, images, val_idcs, device, antialiased):
+def _evaluate(splats, camtoworlds, Ks, width, height, images, val_idcs, device, antialiased, sh_degree=3):
     """Mean val PSNR over the held-out views."""
     import torch
 
     render, alphas, _info = _rasterize(
-        splats, camtoworlds, Ks, width, height, val_idcs, device, antialiased
+        splats, camtoworlds, Ks, width, height, val_idcs, device, antialiased, sh_degree
     )
     bkgd = torch.ones(3, device=device)
     render = _compose_bkgd(render, alphas, bkgd)
@@ -207,14 +245,13 @@ def train(
     val_idcs = list(range(0, n_views, test_every))
     train_idcs = [i for i in range(n_views) if i not in val_idcs]
 
-    c2w = torch.tensor(scene.camtoworlds, dtype=torch.float32, device=device)
-    Ks = torch.tensor(scene.Ks, dtype=torch.float32, device=device)
+    c2w = torch.tensor(scene.camtoworlds, dtype=torch.float32, device=device).view(n_views, 4, 4)
+    Ks = torch.tensor(scene.Ks, dtype=torch.float32, device=device).view(n_views, 3, 3)
     width, height = scene.width, scene.height
     images = {i: _load_image(scene.image_paths[i], device) for i in range(n_views)}
 
     splats, optimizers = create_splats(scene, device=device, sh_degree=sh_degree)
     from gsplat.strategy import DefaultStrategy
-    from gsplat.losses import l1_loss, ssim_loss
 
     strategy = DefaultStrategy(verbose=True)
     strategy_state = strategy.initialize_state(scene_scale=scene.scene_scale)
@@ -237,16 +274,15 @@ def train(
         i = random.choice(train_idcs)
         gt = images[i]
         render, alphas, info = _rasterize(
-            splats, c2w, Ks, width, height, [i], device, antialiased
+            splats, c2w, Ks, width, height, [i], device, antialiased, sh_degree
         )
         render = _compose_bkgd(render, alphas, bkgd)
 
         strategy.step_pre_backward(
             params=splats, optimizers=optimizers, state=strategy_state, step=step, info=info
         )
-        l1 = l1_loss(render, gt).mean()
-        ssim = ssim_loss(render.permute(0, 3, 1, 2), gt.permute(0, 3, 1, 2))
-        loss = (1.0 - _SSIM_LAMBDA) * l1 + _SSIM_LAMBDA * (1.0 - ssim)
+        l1 = _l1_loss(render, gt)
+        loss = l1
         loss.backward()
         for opt in optimizers.values():
             opt.step()
@@ -262,7 +298,7 @@ def train(
 
         if step % ckpt_every == 0:
             val_psnr = _evaluate(
-                splats, c2w, Ks, width, height, images, val_idcs, device, antialiased
+                splats, c2w, Ks, width, height, images, val_idcs, device, antialiased, sh_degree
             )
             final_psnr = val_psnr
             ckpt_path = os.path.join(run_dir, f"ckpt-{step:07d}.pt")

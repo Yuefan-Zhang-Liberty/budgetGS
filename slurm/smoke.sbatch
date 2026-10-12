@@ -18,7 +18,10 @@
 #SBATCH --time=00:20:00
 
 #--- Node selection ---
-#SBATCH --constraint=NOTBIG
+# Node must be Turing+ (CC >= 7.5): gsplat's packed rasterizers use
+# cooperative_groups::labeled_partition, which needs the sm_70+ match
+# primitives (absent on the Pascal p6000/titan nodes).
+#SBATCH --constraint="NOTBIG&GPU_CC:7.5"
 
 #--- Logging ---
 #SBATCH --output=/storage/slurm/zyuef/logs/%x-%j.out
@@ -37,7 +40,8 @@ echo "restarts : ${SLURM_RESTART_COUNT:-0}"
 echo "started  : $(date --iso-8601=seconds)"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader || true
 
-#--- Environment (micromamba env "main") ---
+#--- Environment (mamba env "main") ---
+export MAMBA_ROOT_PREFIX="$HOME/.local/share/mamba"
 export PATH="$HOME/storage/user/zyuef/micromamba/bin:$PATH"
 eval "$(micromamba shell hook -s bash)"
 micromamba activate main
