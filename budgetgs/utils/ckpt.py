@@ -41,7 +41,7 @@ def load_attributes(path: str) -> dict[str, list]:
             if "state_dict" in ckpt and isinstance(ckpt["state_dict"], dict):
                 ckpt = ckpt["state_dict"]
             container = {
-                k: (v.tolist() if hasattr(v, "tolist") else v) for k, v in ckpt.items()
+                k: (v.detach().numpy() if hasattr(v, "detach") else v) for k, v in ckpt.items()
             }
         else:
             container = {"means": getattr(ckpt, "means", None)}
@@ -59,11 +59,54 @@ def load_attributes(path: str) -> dict[str, list]:
         )
 
     attributes: dict[str, list] = {}
-    for name, _channels in ATTRIBUTE_GROUPS:
+    for name, channels in ATTRIBUTE_GROUPS:
         value = _extract(container, name)
         if value is None:
             raise KeyError(
                 f"checkpoint has no attribute for group {name!r}; found keys: {sorted(container)}"
             )
-        attributes[name] = value
+        attributes[name] = _to_rows(value, channels)
     return attributes
+
+
+def _to_rows(value, channels: int = 0) -> "object":
+    """Normalize one attribute group to an N x C row layout.
+
+    Real gsplat checkpoints arrive in three shapes: flat scalars (opacity is
+    ``(N,)``), nested single blocks (sh0 is ``(N, 1, 3)``), and per-gaussian
+    matrices (shn is ``(N, 15, 3)``).  numpy views are reshaped in one
+    vectorized call; plain python lists are converted through numpy.  The
+    declared group ``channels`` decides the flattening: shn with channels=3
+    becomes ``(N*15, 3)`` rows (per-block scale table + model, the winner of
+    the shn-3-vs-45 comparison); channels=45 keeps ``(N, 45)``.
+    """
+    if value is None or (hasattr(value, "__len__") and len(value) == 0):
+        return value
+    try:
+        import numpy as np
+
+        arr = np.asarray(value, dtype=np.float64)
+        if arr.ndim == 1:
+            arr = arr.reshape(-1, 1)
+        elif arr.ndim > 2:
+            if channels and channels < arr.shape[1] * arr.shape[2]:
+                arr = arr.reshape(-1, channels)
+            else:
+                arr = arr.reshape(arr.shape[0], -1)
+        return arr
+    except ImportError:  # pragma: no cover - numpy is a project dependency
+        pass
+    if not hasattr(value[0], "__len__"):
+        return [[v] for v in value]
+    rows = []
+    for row in value:
+        flat = []
+        stack = list(row)
+        while stack:
+            item = stack.pop(0)
+            if hasattr(item, "__len__"):
+                stack[0:0] = list(item)
+            else:
+                flat.append(item)
+        rows.append(flat)
+    return rows

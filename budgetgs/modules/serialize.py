@@ -13,12 +13,19 @@ prediction to within a small constant overhead.
 
 from __future__ import annotations
 
+import array
 import bisect
 import struct
+import zlib
 
 from . import format as fmt
 from .probability import CategoricalModel
 from .quantize import ATTRIBUTE_GROUPS, quantize_group, ScaleTable
+
+# Per-group codec id in the container: 0 = range coder (entropy-tight, the
+# ledger prices it), 1 = zlib (fast feedback path for fit bisection).
+CODEC_RANGE = 0
+CODEC_ZLIB = 1
 
 
 class RangeEncoder:
@@ -99,8 +106,17 @@ class RangeDecoder:
 
 
 def _encode_symbols(
-    symbols: list[int], cum: list[int], total: int, indices: list[int], enc: RangeEncoder
+    symbols: list[int], cum: list[int], total: int, indices, enc: RangeEncoder
 ) -> None:
+    try:
+        import numpy as np
+
+        i_arr = np.searchsorted(np.asarray(symbols, dtype=np.int64), indices)
+        for i in i_arr:
+            enc.encode(cum[i], cum[i + 1], total)
+        return
+    except ImportError:
+        pass  # pure-python fallback below
     for sym in indices:
         i = bisect.bisect_left(symbols, sym)
         enc.encode(cum[i], cum[i + 1], total)
@@ -128,6 +144,7 @@ def _write_group(
     scale_table: ScaleTable,
     indices: list[int],
     model: CategoricalModel,
+    codec: int = CODEC_RANGE,
 ) -> None:
     nb = name.encode("utf-8")
     out += struct.pack("<I", len(nb)) + nb
@@ -135,15 +152,22 @@ def _write_group(
     for lo, hi in zip(scale_table.mins, scale_table.maxs):
         out += struct.pack("<dd", lo, hi)
     out += struct.pack("<Q", len(indices))
-    out += struct.pack("<I", model.n_distinct)
-    symbols, cum, total = model.cumulative_freq()
-    enc = RangeEncoder()
-    _encode_symbols(symbols, cum, total, indices, enc)
-    coded = enc.finish()
-    out += struct.pack("<I", len(coded))
-    for sym, cnt in model.raw_counts():
-        out += struct.pack("<II", sym, cnt)
-    out += coded
+    out += struct.pack("<I", codec)
+    if codec == CODEC_ZLIB:
+        packed = array.array("I", indices).tobytes()
+        coded = zlib.compress(packed, level=6)
+        out += struct.pack("<I", len(coded))
+        out += coded
+    else:
+        out += struct.pack("<I", model.n_distinct)
+        symbols, cum, total = model.cumulative_freq()
+        enc = RangeEncoder()
+        _encode_symbols(symbols, cum, total, indices, enc)
+        coded = enc.finish()
+        out += struct.pack("<I", len(coded))
+        for sym, cnt in model.raw_counts():
+            out += struct.pack("<II", sym, cnt)
+        out += coded
     padding = (fmt.ALIGNMENT - (len(out) % fmt.ALIGNMENT)) % fmt.ALIGNMENT
     out += b"\x00" * padding
 
@@ -153,12 +177,18 @@ def write_container(
     attributes: dict[str, list],
     groups: tuple[tuple[str, int], ...] = ATTRIBUTE_GROUPS,
     levels: int = 4096,
+    codec: int = CODEC_RANGE,
 ) -> int:
-    """Serialize ``attributes`` to ``path``; return the actual byte count."""
+    """Serialize ``attributes`` to ``path``; return the actual byte count.
+
+    ``codec`` selects the per-group entropy coding: ``CODEC_RANGE`` is the
+    ledger-priced range coder (default); ``CODEC_ZLIB`` is a fast feedback
+    path for fit bisection that still writes and reads back real containers.
+    """
     n_gaussians = len(attributes[groups[0][0]])
     out = bytearray()
     out += fmt.MAGIC
-    out += struct.pack("<IIIII", fmt.VERSION, n_gaussians, len(groups), levels, 0)
+    out += struct.pack("<IIIII", fmt.VERSION, n_gaussians, len(groups), levels, codec)
     for name, channels in groups:
         if name not in attributes:
             raise KeyError(
@@ -167,7 +197,7 @@ def write_container(
         values = attributes[name]
         scale_table, indices = quantize_group(values, levels)
         model = CategoricalModel.from_symbols(indices, levels)
-        _write_group(out, name, channels, scale_table, indices, model)
+        _write_group(out, name, channels, scale_table, indices, model, codec=codec)
     with open(path, "wb") as f:
         f.write(out)
     return len(out)
@@ -207,6 +237,17 @@ def read_container(
             mins.append(lo)
             maxs.append(hi)
         (n_symbols,) = struct.unpack("<Q", take(8))
+        (codec,) = struct.unpack("<I", take(4))
+        if codec == CODEC_ZLIB:
+            (coded_len,) = struct.unpack("<I", take(4))
+            packed = zlib.decompress(take(coded_len))
+            counts = [0, 1]  # placeholder; zlib groups carry no counts table
+            indices = list(array.array("I", packed))
+            result[name] = (indices, ScaleTable(tuple(mins), tuple(maxs)))
+            # Skip padding to the alignment boundary exactly as the writer.
+            padding = (fmt.ALIGNMENT - (pos % fmt.ALIGNMENT)) % fmt.ALIGNMENT
+            take(padding)
+            continue
         (n_distinct,) = struct.unpack("<I", take(4))
         (coded_len,) = struct.unpack("<I", take(4))
         entries = [struct.unpack("<II", take(8)) for _ in range(n_distinct)]

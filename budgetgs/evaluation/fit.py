@@ -17,7 +17,7 @@ from __future__ import annotations
 import os
 import tempfile
 
-from ..modules.serialize import write_container
+from ..modules.serialize import CODEC_ZLIB, write_container
 
 
 class FitResult:
@@ -56,12 +56,12 @@ class FitResult:
         )
 
 
-def _real_bytes(attributes: dict[str, list], levels: int, workdir: str) -> int:
-    """Write the container once and return its actual size in bytes."""
+def _real_bytes(attributes: dict[str, list], levels: int, workdir: str, codec: int = CODEC_ZLIB) -> int:
+    """Write the container once (zlib fast path by default) and return its actual size."""
     fd, path = tempfile.mkstemp(suffix=".bin", dir=workdir)
     os.close(fd)
     try:
-        return write_container(path, attributes, levels=levels)
+        return write_container(path, attributes, levels=levels, codec=codec)
     finally:
         os.remove(path)
 

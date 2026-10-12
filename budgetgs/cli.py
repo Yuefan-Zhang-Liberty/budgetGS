@@ -47,6 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
     serialize_parser.add_argument('--ckpt', required=True, help='path to a trained checkpoint')
     serialize_parser.add_argument('--out', required=True, help='output file path')
     serialize_parser.add_argument('--levels', type=int, default=4096, help='quantization levels per attribute block')
+    serialize_parser.add_argument('--codec', choices=['range', 'zlib'], default='range', help='entropy codec (range=ledger-priced, zlib=fast)')
 
     return parser
 
@@ -115,8 +116,10 @@ def serialize(args: argparse.Namespace) -> None:
     from .utils.ckpt import load_attributes
 
     attributes = load_attributes(args.ckpt)
-    n = write_container(args.out, attributes, levels=args.levels)
-    print(f'wrote {n} bytes to {args.out}')
+    from .modules.serialize import CODEC_RANGE, CODEC_ZLIB
+    codec = CODEC_ZLIB if args.codec == 'zlib' else CODEC_RANGE
+    n = write_container(args.out, attributes, levels=args.levels, codec=codec)
+    print(f'wrote {n} bytes to {args.out} (codec={args.codec})')
 
 #---------------------------------------------------------------------
 # Entry point

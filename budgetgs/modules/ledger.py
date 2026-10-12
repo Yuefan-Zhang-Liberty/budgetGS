@@ -70,7 +70,8 @@ def _group_ledger(
     name_bytes = fmt.NAME_LEN_BYTES + len(name.encode("utf-8"))
     scale_bytes = channels * fmt.SCALE_ENTRY_BYTES
     table_bytes = (
-        fmt.N_DISTINCT_BYTES
+        fmt.CODEC_BYTES
+        + fmt.N_DISTINCT_BYTES
         + fmt.CODED_LEN_BYTES
         + n_distinct * fmt.SYMBOL_COUNT_ENTRY_BYTES
     )

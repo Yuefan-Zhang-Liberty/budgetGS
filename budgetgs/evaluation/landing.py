@@ -23,52 +23,39 @@ def _dequant_attributes(
     decoded: dict[str, tuple[list[int], object]],
     levels: int,
     original: dict[str, list],
-) -> dict[str, list]:
-    """Rebuild attribute values from container indices + scale tables, keeping
-    each group's original shape (flat 1-ch, (N, C), or SH (N, K, C))."""
-    out: dict[str, list] = {}
+) -> dict[str, object]:
+    """Rebuild attribute values as (n, channels) numpy arrays (channel-major
+    index stream is de-interleaved per the writer's layout)."""
+    import numpy as np
+
+    out: dict[str, object] = {}
     for name, (indices, scale_table) in decoded.items():
         channels = len(scale_table.mins)
-        first = original[name][0]
-        if isinstance(first, (list, tuple)) and isinstance(first[0], (list, tuple)):
-            n = len(original[name])
-            k = len(first)
-            blocks: list[list[list[float]]] = []
-            for r in range(n):
-                block: list[list[float]] = []
-                for kk in range(k):
-                    row: list[float] = []
-                    for c in range(channels):
-                        lo = scale_table.mins[c]
-                        hi = scale_table.maxs[c]
-                        idx = indices[(r * k + kk) * channels + c]
-                        row.append(dequantize_channel([idx], lo, hi, levels)[0])
-                    block.append(row)
-                blocks.append(block)
-            out[name] = blocks
-        elif isinstance(first, (list, tuple)):
-            n = len(original[name])
-            rows: list[list[float]] = []
-            for r in range(n):
-                row = [dequantize_channel(
-                    [indices[r * channels + c]], scale_table.mins[c], scale_table.maxs[c], levels
-                )[0] for c in range(channels)]
-                rows.append(row)
-            out[name] = rows
-        else:
-            out[name] = [
-                dequantize_channel([i], scale_table.mins[0], scale_table.maxs[0], levels)[0]
-                for i in indices
-            ]
+        n = len(indices) // channels
+        idx_arr = np.asarray(indices, dtype=np.float64)
+        rows = np.empty((n, channels), dtype=np.float64)
+        for c in range(channels):
+            lo = scale_table.mins[c]
+            hi = scale_table.maxs[c]
+            inv = (hi - lo) / (levels - 1) if levels > 1 else 0.0
+            rows[:, c] = lo + idx_arr[c::channels] * inv
+        out[name] = rows
     return out
 
 
-def _splats_tensors(attributes: dict[str, list[list[float]]], device: str):
+def _splats_tensors(attributes: dict[str, object], device: str, sh_degree: int = 3):
+    """Build the renderer's splat dict from attribute arrays; SH blocks are
+    stored flat (sh0 (N,3), shn (N,K*3)) and reshaped to (N,1,3)/(N,K,3)."""
     import torch
 
+    k = (sh_degree + 1) ** 2 - 1
     return {
-        name: torch.tensor(attributes[name], dtype=torch.float32, device=device)
-        for name in ("means", "scales", "quats", "opacity", "sh0", "shn")
+        "means": torch.tensor(attributes["means"], dtype=torch.float32, device=device),
+        "scales": torch.tensor(attributes["scales"], dtype=torch.float32, device=device),
+        "quats": torch.tensor(attributes["quats"], dtype=torch.float32, device=device),
+        "opacity": torch.tensor(attributes["opacity"], dtype=torch.float32, device=device).reshape(-1),
+        "sh0": torch.tensor(attributes["sh0"], dtype=torch.float32, device=device).reshape(-1, 1, 3),
+        "shn": torch.tensor(attributes["shn"], dtype=torch.float32, device=device).reshape(-1, k, 3),
     }
 
 
@@ -125,6 +112,11 @@ def analyze_landing(
     from ..modules.trainer import _load_image
 
     attributes = load_attributes(ckpt_path)
+    import torch as _torch
+
+    _ckpt = _torch.load(ckpt_path, map_location="cpu", weights_only=False)
+    _cfg = _ckpt.get("config", {}) if isinstance(_ckpt, dict) else {}
+    sh_degree = int(_cfg.get("sh_degree", sh_degree))
     budget = int(budget_mb * _BUDGET_BYTES)
     fit = fit_levels(attributes, budget, tolerance=tolerance)
 
@@ -160,8 +152,8 @@ def analyze_landing(
             lpips_model = lpips.LPIPS(net="alex").to(device).eval()
         except Exception:
             lpips_model = None
-        ref_splats = _splats_tensors(attributes, device)
-        rec_splats = _splats_tensors(recon, device)
+        ref_splats = _splats_tensors(attributes, device, sh_degree)
+        rec_splats = _splats_tensors(recon, device, sh_degree)
         ref_views = _render_views(ref_splats, scene, val_idcs, device, sh_degree)
         rec_views = _render_views(rec_splats, scene, val_idcs, device, sh_degree)
         metric_names = ["psnr", "ssim", "lpips"]
