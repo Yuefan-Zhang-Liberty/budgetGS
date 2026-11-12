@@ -66,7 +66,7 @@ budgetgs ledger --ckpt <checkpoint>
 budgetgs serialize --ckpt <checkpoint> --out scene.splat
 ```
 
-Experiment-level entry points (top-level scripts):
+Experiment-level entry points (in `experiments/`):
 
 | Script | Purpose |
 |---|---|
@@ -77,10 +77,11 @@ Experiment-level entry points (top-level scripts):
 | `sensitivity.py` | single-attribute quantization sensitivity (P1-a) |
 | `p1a_errors.py` / `p1a_geom.py` | P1-a fragility / geometry diagnosis |
 | `cmp_qa_dist.py` / `cmp_qa_perview.py` | P0-A per-view comparison |
-| `read_mu.py` | inspect learned μ-law coefficients |
 | `render_compare.py` | side-by-side render comparison |
 | `directionA_offline.py` | offline per-attribute bit-allocation (direction A) |
 | `directionB_room.py` / `directionB_scene.py` | direction-B scene experiments |
+| `mem_probe.py` | peak VRAM probe for a full-res training step |
+| `sim_real.py` / `sim_sgd.py` | μ-law training simulations on real attribute distributions |
 
 ## Repository layout
 
@@ -90,7 +91,7 @@ Experiment-level entry points (top-level scripts):
 ├── tests/               # automated tests
 ├── slurm/               # smoke-test entry (smoke_gsplat.py)
 ├── runs/analysis/       # experiment results: json metrics + figures
-├── *.py                 # experiment-level entry points (see table above)
+├── experiments/         # experiment-level entry points (see table above)
 ├── pyproject.toml
 └── README.md
 ```
