@@ -25,10 +25,39 @@ ATTRIBUTE_GROUPS: tuple[tuple[str, int], ...] = (
 
 @dataclass(frozen=True)
 class ScaleTable:
-    """Per-channel min/max quantization bounds (the 'min/max scale table')."""
+    """Per-channel min/max quantization bounds (the 'min/max scale table').
+
+    ``mu`` is the mu-law companding strength used for non-uniform quantization
+    (0 = uniform); it is stored so the reader can inverse-compand.
+    """
 
     mins: tuple[float, ...]
     maxs: tuple[float, ...]
+    mu: float = 0.0
+
+
+def mulaw_compand(u, mu):
+    """mu-law compress normalized ``u`` in [0,1] (numpy). ``mu <= 0`` identity."""
+    import numpy as np
+
+    if mu is None or mu <= 1e-6:
+        return u
+    t = 2.0 * u - 1.0
+    log_mu = np.log1p(mu)
+    t_c = np.sign(t) * np.log1p(mu * np.abs(t)) / log_mu
+    return (t_c + 1.0) * 0.5
+
+
+def mulaw_expand(v, mu):
+    """Inverse of :func:`mulaw_compand` (numpy)."""
+    import numpy as np
+
+    if mu is None or mu <= 1e-6:
+        return v
+    t = 2.0 * v - 1.0
+    log_mu = np.log1p(mu)
+    t_e = np.sign(t) * np.expm1(np.abs(t) * log_mu) / mu
+    return (t_e + 1.0) * 0.5
 
 
 def _channel_bounds(values: list[float], levels: int) -> tuple[float, float]:
@@ -39,10 +68,16 @@ def _channel_bounds(values: list[float], levels: int) -> tuple[float, float]:
     return lo, hi
 
 
-def quantize_channel(values: list[float], lo: float, hi: float, levels: int) -> list[int]:
-    """Uniformly quantize one channel into ``levels`` integer bins over [lo, hi]."""
-    scale = (levels - 1) / (hi - lo)
-    return [max(0, min(levels - 1, int(round((v - lo) * scale)))) for v in values]
+def quantize_channel(values: list[float], lo: float, hi: float, levels: int,
+                     mu: float = 0.0) -> list[int]:
+    """Quantize one channel into ``levels`` integer bins over [lo, hi]. Non-uniform
+    through mu-law companding when ``mu > 0``; ``mu = 0`` is uniform."""
+    import numpy as np
+
+    u = (np.asarray(values, dtype=np.float64) - lo) / (hi - lo)
+    v = mulaw_compand(u, mu)
+    idx = np.rint(v * (levels - 1)).astype(np.int64)
+    return np.clip(idx, 0, levels - 1).tolist()
 
 
 def dequantize_channel(indices: list[int], lo: float, hi: float, levels: int) -> list[float]:
@@ -51,7 +86,7 @@ def dequantize_channel(indices: list[int], lo: float, hi: float, levels: int) ->
     return [lo + i * inv for i in indices]
 
 
-def quantize_group(values, levels: int) -> tuple[ScaleTable, list[int]]:
+def quantize_group(values, levels: int, mu: float = 0.0) -> tuple[ScaleTable, list[int]]:
     """Quantize one attribute group.
 
     ``values`` is a list of n rows of ``channels`` floats (``values[r][c]``)
@@ -87,10 +122,12 @@ def quantize_group(values, levels: int) -> tuple[ScaleTable, list[int]]:
                 hi = lo + 1e-6
             mins.append(lo)
             maxs.append(hi)
-            idx = np.rint((col - lo) * ((levels - 1) / (hi - lo))).astype(np.int64)
+            u = (col - lo) / (hi - lo)
+            v = mulaw_compand(u, mu)
+            idx = np.rint(v * (levels - 1)).astype(np.int64)
             np.clip(idx, 0, levels - 1, out=idx)
             flat.extend(idx.tolist())
-        return ScaleTable(tuple(mins), tuple(maxs)), flat
+        return ScaleTable(tuple(mins), tuple(maxs), mu=float(mu)), flat
     except ImportError:
         pass  # pragma: no cover - numpy is a project dependency
 
@@ -110,5 +147,5 @@ def quantize_group(values, levels: int) -> tuple[ScaleTable, list[int]]:
         lo, hi = _channel_bounds(per_channel[c], levels)
         mins.append(lo)
         maxs.append(hi)
-        flat.extend(quantize_channel(per_channel[c], lo, hi, levels))
-    return ScaleTable(tuple(mins), tuple(maxs)), flat
+        flat.extend(quantize_channel(per_channel[c], lo, hi, levels, mu=mu))
+    return ScaleTable(tuple(mins), tuple(maxs), mu=float(mu)), flat

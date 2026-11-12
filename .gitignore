@@ -10,3 +10,13 @@ runs/*
 .pytest_cache/
 .ruff_cache/
 *.bgs
+
+# --- budgetgs-m0b additions ---
+C:*
+rc-*.a*
+*.bak-*
+hist_out.txt
+hist_err.txt
+test_out.txt
+runs/analysis/*-renders.png
+runs/analysis/*-mix-renders.png

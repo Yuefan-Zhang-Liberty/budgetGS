@@ -1,4 +1,4 @@
-"""Real serializer for BudgetGS checkpoints.
+﻿"""Real serializer for BudgetGS checkpoints.
 
 Writes exactly the container the ledger predicts: header, per-group
 name/channels/scale table/probability table, then range-coded quantized indices
@@ -42,7 +42,16 @@ class RangeEncoder:
         self.cache_size = 1
 
     def _shift_low(self) -> None:
-        if self.low < 0xFF000000 or self.low > self.MASK:
+        # cap cache_size like the reference LZMA coder (>=4 forces a flush);
+        # without the cap a symbol stream concentrated in a few bins keeps
+        # ``low`` inside [0xFF000000, MASK] for long stretches, cache_size
+        # grows unboundedly and each flush appends cache_size bytes -> O(n^2)
+        # hang (observed on shn 45ch @ lv=10 with extreme mu).
+        if (
+            self.low < 0xFF000000
+            or self.low > self.MASK
+            or self.cache_size > 4
+        ):
             carry = self.low >> 32
             self.out.append((self.cache + carry) & 0xFF)
             for _ in range(self.cache_size - 1):
@@ -53,6 +62,12 @@ class RangeEncoder:
         self.low = (self.low << 8) & self.MASK
 
     def encode(self, cum_low: int, cum_high: int, total: int) -> None:
+        # Precondition enforced by the caller: total < 2^24 (TOP) so that
+        # range (always >= TOP after renormalization) is never smaller than
+        # total. If total >= 2^24, range//total can become 0 and the
+        # renormalize loop spins forever on range 0. Callers with very large
+        # symbol blocks (e.g. shn 45ch x 375k = 16.875M symbols) MUST split
+        # the block so each group's total stays below 2^24.
         self.range //= total
         self.low += cum_low * self.range
         self.range *= cum_high - cum_low
@@ -151,6 +166,9 @@ def _write_group(
     out += struct.pack("<I", channels)
     for lo, hi in zip(scale_table.mins, scale_table.maxs):
         out += struct.pack("<dd", lo, hi)
+    # mu-law companding strength (8 bytes, float64); 0 = uniform
+    mu = getattr(scale_table, "mu", 0.0)
+    out += struct.pack("<d", mu)
     out += struct.pack("<Q", len(indices))
     out += struct.pack("<I", codec)
     if codec == CODEC_ZLIB:
@@ -178,12 +196,15 @@ def write_container(
     groups: tuple[tuple[str, int], ...] = ATTRIBUTE_GROUPS,
     levels: int = 4096,
     codec: int = CODEC_RANGE,
+    mu=0.0,
 ) -> int:
     """Serialize ``attributes`` to ``path``; return the actual byte count.
 
     ``codec`` selects the per-group entropy coding: ``CODEC_RANGE`` is the
     ledger-priced range coder (default); ``CODEC_ZLIB`` is a fast feedback
     path for fit bisection that still writes and reads back real containers.
+    ``mu`` is the mu-law companding strength (scalar or a per-group dict,
+    0 = uniform).
     """
     n_gaussians = len(attributes[groups[0][0]])
     out = bytearray()
@@ -195,7 +216,8 @@ def write_container(
                 f"serialize: missing attribute group {name!r}; found {sorted(attributes)}"
             )
         values = attributes[name]
-        scale_table, indices = quantize_group(values, levels)
+        gmu = mu[name] if isinstance(mu, dict) else mu
+        scale_table, indices = quantize_group(values, levels, mu=gmu)
         model = CategoricalModel.from_symbols(indices, levels)
         _write_group(out, name, channels, scale_table, indices, model, codec=codec)
     with open(path, "wb") as f:
@@ -236,6 +258,7 @@ def read_container(
             lo, hi = struct.unpack("<dd", take(16))
             mins.append(lo)
             maxs.append(hi)
+        (mu,) = struct.unpack("<d", take(8))
         (n_symbols,) = struct.unpack("<Q", take(8))
         (codec,) = struct.unpack("<I", take(4))
         if codec == CODEC_ZLIB:
@@ -243,7 +266,7 @@ def read_container(
             packed = zlib.decompress(take(coded_len))
             counts = [0, 1]  # placeholder; zlib groups carry no counts table
             indices = list(array.array("I", packed))
-            result[name] = (indices, ScaleTable(tuple(mins), tuple(maxs)))
+            result[name] = (indices, ScaleTable(tuple(mins), tuple(maxs), mu=mu))
             # Skip padding to the alignment boundary exactly as the writer.
             padding = (fmt.ALIGNMENT - (pos % fmt.ALIGNMENT)) % fmt.ALIGNMENT
             take(padding)
@@ -258,8 +281,14 @@ def read_container(
         padding = (fmt.ALIGNMENT - (pos % fmt.ALIGNMENT)) % fmt.ALIGNMENT
         take(padding)
         counts = {sym: cnt for sym, cnt in entries}
-        model = CategoricalModel(counts, n_symbols, levels)
+        # Mixed containers put a placeholder (0) in the global header levels;
+        # derive a valid per-group level from the observed symbols. The range
+        # decoder only needs the cumulative table over these symbols.
+        grp_levels = max(int(levels), max(counts.keys()) + 1)
+        if grp_levels < 2:
+            grp_levels = 2
+        model = CategoricalModel(counts, n_symbols, grp_levels)
         symbols, cum, total = model.cumulative_freq()
         indices = _decode_symbols(coded, symbols, cum, total, n_symbols)
-        result[name] = (indices, ScaleTable(tuple(mins), tuple(maxs)))
+        result[name] = (indices, ScaleTable(tuple(mins), tuple(maxs), mu=mu))
     return result

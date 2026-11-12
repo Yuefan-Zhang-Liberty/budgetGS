@@ -220,10 +220,13 @@ def intrinsics_from_camera(cam: dict, factor: int) -> tuple[list[float], list[fl
 
 
 def _resolve_image_path(data_dir: str, name: str, factor: int) -> str:
-    """Map a COLMAP image name onto the downscaled ``images_{factor}`` folder."""
+    """Map a COLMAP image name onto the full-res ``images`` or downscaled
+    ``images_{factor}`` folder (360_v2 official layout: ``<scene>/images/``)."""
     base = os.path.basename(name)
     if factor == 1:
-        return os.path.join(data_dir, name)
+        if name.startswith("images/"):
+            return os.path.join(data_dir, name)
+        return os.path.join(data_dir, "images", base)
     if name.startswith("images/"):
         return os.path.join(data_dir, f"images_{factor}", name[len("images/"):])
     return os.path.join(data_dir, f"images_{factor}", base)

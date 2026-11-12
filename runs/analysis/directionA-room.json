@@ -1,0 +1,490 @@
+{
+  "scene": "room",
+  "n_gaussians": 578646,
+  "budget_mb": 10.0,
+  "group_order": [
+    "means",
+    "scales",
+    "quats",
+    "opacity",
+    "sh0",
+    "shn"
+  ],
+  "ref": {
+    "psnr": 27.4189,
+    "ssim": 0.8349,
+    "lpips": 0.3131
+  },
+  "all_23": {
+    "levels": {
+      "means": 23,
+      "scales": 23,
+      "quats": 23,
+      "opacity": 23,
+      "sh0": 23,
+      "shn": 23
+    },
+    "bytes": 9432424,
+    "mb": 9.432,
+    "psnr": 5.33,
+    "ssim": 0.3553,
+    "lpips": 0.8649,
+    "sec": 24.8
+  },
+  "onehot": {
+    "means": {
+      "levels": {
+        "means": 4096,
+        "scales": 23,
+        "quats": 23,
+        "opacity": 23,
+        "sh0": 23,
+        "shn": 23
+      },
+      "bytes": 11587192,
+      "mb": 11.587,
+      "psnr": 21.95,
+      "ssim": 0.6893,
+      "lpips": 0.4981,
+      "sec": 26.0
+    },
+    "scales": {
+      "levels": {
+        "means": 23,
+        "scales": 4096,
+        "quats": 23,
+        "opacity": 23,
+        "sh0": 23,
+        "shn": 23
+      },
+      "bytes": 11639456,
+      "mb": 11.639,
+      "psnr": 4.57,
+      "ssim": 0.3443,
+      "lpips": 0.8802,
+      "sec": 25.6
+    },
+    "quats": {
+      "levels": {
+        "means": 23,
+        "scales": 23,
+        "quats": 4096,
+        "opacity": 23,
+        "sh0": 23,
+        "shn": 23
+      },
+      "bytes": 12330816,
+      "mb": 12.331,
+      "psnr": 5.29,
+      "ssim": 0.3568,
+      "lpips": 0.8659,
+      "sec": 25.9
+    },
+    "opacity": {
+      "levels": {
+        "means": 23,
+        "scales": 23,
+        "quats": 23,
+        "opacity": 4096,
+        "sh0": 23,
+        "shn": 23
+      },
+      "bytes": 10060888,
+      "mb": 10.061,
+      "psnr": 5.33,
+      "ssim": 0.3553,
+      "lpips": 0.8648,
+      "sec": 26.0
+    },
+    "sh0": {
+      "levels": {
+        "means": 23,
+        "scales": 23,
+        "quats": 23,
+        "opacity": 23,
+        "sh0": 4096,
+        "shn": 23
+      },
+      "bytes": 11570136,
+      "mb": 11.57,
+      "psnr": 5.35,
+      "ssim": 0.3575,
+      "lpips": 0.8583,
+      "sec": 25.9
+    },
+    "shn": {
+      "levels": {
+        "means": 23,
+        "scales": 23,
+        "quats": 23,
+        "opacity": 23,
+        "sh0": 23,
+        "shn": 4096
+      },
+      "bytes": 40046256,
+      "mb": 40.046,
+      "psnr": 5.34,
+      "ssim": 0.3553,
+      "lpips": 0.8643,
+      "sec": 39.7
+    }
+  },
+  "means_sweep": {
+    "23": {
+      "levels": {
+        "means": 23,
+        "scales": 23,
+        "quats": 23,
+        "opacity": 23,
+        "sh0": 23,
+        "shn": 23
+      },
+      "bytes": 9432424,
+      "mb": 9.432,
+      "psnr": 5.33,
+      "ssim": 0.3553,
+      "lpips": 0.8649,
+      "sec": 24.8
+    },
+    "64": {
+      "levels": {
+        "means": 64,
+        "scales": 23,
+        "quats": 23,
+        "opacity": 23,
+        "sh0": 23,
+        "shn": 23
+      },
+      "bytes": 9806688,
+      "mb": 9.807,
+      "psnr": 10.11,
+      "ssim": 0.4326,
+      "lpips": 0.7694,
+      "sec": 25.1
+    },
+    "128": {
+      "levels": {
+        "means": 128,
+        "scales": 23,
+        "quats": 23,
+        "opacity": 23,
+        "sh0": 23,
+        "shn": 23
+      },
+      "bytes": 10075048,
+      "mb": 10.075,
+      "psnr": 13.39,
+      "ssim": 0.493,
+      "lpips": 0.7027,
+      "sec": 24.8
+    },
+    "256": {
+      "levels": {
+        "means": 256,
+        "scales": 23,
+        "quats": 23,
+        "opacity": 23,
+        "sh0": 23,
+        "shn": 23
+      },
+      "bytes": 10372664,
+      "mb": 10.373,
+      "psnr": 17.26,
+      "ssim": 0.5576,
+      "lpips": 0.6343,
+      "sec": 25.4
+    },
+    "512": {
+      "levels": {
+        "means": 512,
+        "scales": 23,
+        "quats": 23,
+        "opacity": 23,
+        "sh0": 23,
+        "shn": 23
+      },
+      "bytes": 10693704,
+      "mb": 10.694,
+      "psnr": 19.1,
+      "ssim": 0.6014,
+      "lpips": 0.579,
+      "sec": 26.3
+    },
+    "1024": {
+      "levels": {
+        "means": 1024,
+        "scales": 23,
+        "quats": 23,
+        "opacity": 23,
+        "sh0": 23,
+        "shn": 23
+      },
+      "bytes": 11011456,
+      "mb": 11.011,
+      "psnr": 20.58,
+      "ssim": 0.6358,
+      "lpips": 0.5371,
+      "sec": 25.4
+    },
+    "2048": {
+      "levels": {
+        "means": 2048,
+        "scales": 23,
+        "quats": 23,
+        "opacity": 23,
+        "sh0": 23,
+        "shn": 23
+      },
+      "bytes": 11315936,
+      "mb": 11.316,
+      "psnr": 21.51,
+      "ssim": 0.6679,
+      "lpips": 0.51,
+      "sec": 25.9
+    },
+    "4096": {
+      "levels": {
+        "means": 4096,
+        "scales": 23,
+        "quats": 23,
+        "opacity": 23,
+        "sh0": 23,
+        "shn": 23
+      },
+      "bytes": 11587192,
+      "mb": 11.587,
+      "psnr": 21.95,
+      "ssim": 0.6893,
+      "lpips": 0.4981,
+      "sec": 26.0
+    }
+  },
+  "greedy_path": [
+    {
+      "levels": {
+        "means": 23,
+        "scales": 23,
+        "quats": 23,
+        "opacity": 23,
+        "sh0": 23,
+        "shn": 23
+      },
+      "bytes": 9432424,
+      "mb": 9.432,
+      "psnr": 5.33,
+      "ssim": 0.3553,
+      "lpips": 0.8649,
+      "sec": 24.8
+    },
+    {
+      "levels": {
+        "means": 128,
+        "scales": 23,
+        "quats": 23,
+        "opacity": 23,
+        "sh0": 23,
+        "shn": 23
+      },
+      "bytes": 10075048,
+      "mb": 10.075,
+      "psnr": 13.39,
+      "ssim": 0.493,
+      "lpips": 0.7027,
+      "sec": 24.8
+    },
+    {
+      "levels": {
+        "means": 512,
+        "scales": 23,
+        "quats": 23,
+        "opacity": 23,
+        "sh0": 23,
+        "shn": 23
+      },
+      "bytes": 10693704,
+      "mb": 10.694,
+      "psnr": 19.1,
+      "ssim": 0.6014,
+      "lpips": 0.579,
+      "sec": 26.3
+    },
+    {
+      "levels": {
+        "means": 2048,
+        "scales": 23,
+        "quats": 23,
+        "opacity": 23,
+        "sh0": 23,
+        "shn": 23
+      },
+      "bytes": 11315936,
+      "mb": 11.316,
+      "psnr": 21.51,
+      "ssim": 0.6679,
+      "lpips": 0.51,
+      "sec": 25.9
+    },
+    {
+      "levels": {
+        "means": 2048,
+        "scales": 128,
+        "quats": 23,
+        "opacity": 23,
+        "sh0": 23,
+        "shn": 23
+      },
+      "bytes": 12052216,
+      "mb": 12.052,
+      "psnr": 22.89,
+      "ssim": 0.6859,
+      "lpips": 0.4827,
+      "sec": 25.7
+    },
+    {
+      "levels": {
+        "means": 4096,
+        "scales": 128,
+        "quats": 23,
+        "opacity": 23,
+        "sh0": 23,
+        "shn": 23
+      },
+      "bytes": 12323472,
+      "mb": 12.323,
+      "psnr": 23.7,
+      "ssim": 0.717,
+      "lpips": 0.4608,
+      "sec": 26.0
+    },
+    {
+      "levels": {
+        "means": 4096,
+        "scales": 128,
+        "quats": 23,
+        "opacity": 23,
+        "sh0": 128,
+        "shn": 23
+      },
+      "bytes": 12999912,
+      "mb": 13.0,
+      "psnr": 24.58,
+      "ssim": 0.7606,
+      "lpips": 0.3963,
+      "sec": 25.8
+    },
+    {
+      "levels": {
+        "means": 4096,
+        "scales": 128,
+        "quats": 128,
+        "opacity": 23,
+        "sh0": 128,
+        "shn": 23
+      },
+      "bytes": 13973368,
+      "mb": 13.973,
+      "psnr": 25.48,
+      "ssim": 0.7833,
+      "lpips": 0.3751,
+      "sec": 26.5
+    },
+    {
+      "levels": {
+        "means": 4096,
+        "scales": 128,
+        "quats": 128,
+        "opacity": 128,
+        "sh0": 128,
+        "shn": 23
+      },
+      "bytes": 14217544,
+      "mb": 14.218,
+      "psnr": 25.5,
+      "ssim": 0.7842,
+      "lpips": 0.3743,
+      "sec": 26.3
+    },
+    {
+      "levels": {
+        "means": 4096,
+        "scales": 128,
+        "quats": 128,
+        "opacity": 128,
+        "sh0": 128,
+        "shn": 128
+      },
+      "bytes": 24269928,
+      "mb": 24.27,
+      "psnr": 26.17,
+      "ssim": 0.8008,
+      "lpips": 0.3446,
+      "sec": 29.7
+    },
+    {
+      "levels": {
+        "means": 4096,
+        "scales": 512,
+        "quats": 128,
+        "opacity": 128,
+        "sh0": 128,
+        "shn": 128
+      },
+      "bytes": 24955392,
+      "mb": 24.955,
+      "psnr": 26.22,
+      "ssim": 0.8019,
+      "lpips": 0.3432,
+      "sec": 29.9
+    },
+    {
+      "levels": {
+        "means": 4096,
+        "scales": 512,
+        "quats": 128,
+        "opacity": 128,
+        "sh0": 512,
+        "shn": 128
+      },
+      "bytes": 25645392,
+      "mb": 25.645,
+      "psnr": 26.25,
+      "ssim": 0.8034,
+      "lpips": 0.3379,
+      "sec": 29.8
+    },
+    {
+      "levels": {
+        "means": 4096,
+        "scales": 512,
+        "quats": 512,
+        "opacity": 128,
+        "sh0": 512,
+        "shn": 128
+      },
+      "bytes": 26628344,
+      "mb": 26.628,
+      "psnr": 26.29,
+      "ssim": 0.8049,
+      "lpips": 0.3369,
+      "sec": 30.9
+    }
+  ],
+  "best_within_budget": {
+    "levels": {
+      "means": 23,
+      "scales": 23,
+      "quats": 23,
+      "opacity": 23,
+      "sh0": 23,
+      "shn": 23
+    },
+    "bytes": 9432424,
+    "mb": 9.432,
+    "psnr": 5.33,
+    "ssim": 0.3553,
+    "lpips": 0.8649,
+    "sec": 24.8
+  },
+  "complete": true,
+  "note": "complete"
+}
