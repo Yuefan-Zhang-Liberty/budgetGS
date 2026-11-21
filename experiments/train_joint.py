@@ -361,6 +361,9 @@ def train_joint(
     lambda_mode="dual",
     lambda_eta=1e-4,
     n_hold_step=None,
+    qat=True,
+    rate=True,
+    probe=True,
 ):
     import numpy as np
     import torch
@@ -502,17 +505,22 @@ def train_joint(
             g = (step - warmup) / max(steps - warmup, 1)
             levels = schedule.levels_at(g)
             levels_map = {name: levels[j] for j, name in enumerate(ATTR_ORDER)}
-            # noise-path QAT: additive uniform noise whose variance exactly
-            # matches the true rounding error at the current levels; levels
-            # finally receive a real quality gradient (dxq/ds = -eps/s^2).
-            # P0-2d: keep additive-noise QAT while the budget is still being
-            # pursued, but once it is satisfied switch to the true discrete
-            # round path so late-stage fine-tuning optimises exactly what the
-            # landing/evaluation renders (no noise-path vs round-path drift).
-            view = quantized_splats(
-                splats, levels_map, noise=not _budget_satisfied, mu_per_attr=mu_map()
-            )
-            render, info = render_view(view, i)
+            if qat:
+                # noise-path QAT: additive uniform noise whose variance exactly
+                # matches the true rounding error at the current levels; levels
+                # finally receive a real quality gradient (dxq/ds = -eps/s^2).
+                # P0-2d: keep additive-noise QAT while the budget is still being
+                # pursued, but once it is satisfied switch to the true discrete
+                # round path so late-stage fine-tuning optimises exactly what the
+                # landing/evaluation renders (no noise-path vs round-path drift).
+                view = quantized_splats(
+                    splats, levels_map, noise=not _budget_satisfied, mu_per_attr=mu_map()
+                )
+                render, info = render_view(view, i)
+            else:
+                # ablation A off: no quantization-aware forward, train on the
+                # continuous representation (quantize only at landing = post-hoc).
+                render, info = render_view(splats, i)
         else:
             g = 0.0
             render, info = render_view(splats, i)
@@ -537,13 +545,15 @@ def train_joint(
         # Continuous (differentiable) rate pressure that never vanishes: the
         # surrogate bytes are normalized by the budget so lam controls the
         # distortion-vs-rate trade-off directly. Adapted every 250 steps.
-        if phase2:
+        # Ablation D off -> no rate term, no lambda pressure (levels stay on
+        # the annealed schedule to the fixed init_targets allocation).
+        if phase2 and rate:
             n_now = splats["means"].shape[0]
-            rate = surrogate_bytes(levels, n_now, ch)
+            rate_val = surrogate_bytes(levels, n_now, ch)
             if calib is not None:
-                rate_real = rate * calib
+                rate_real = rate_val * calib
             else:
-                rate_real = rate
+                rate_real = rate_val
             loss = loss + lam * (rate_real / budget_bytes)
 
         loss.backward()
@@ -551,13 +561,16 @@ def train_joint(
             opt.step()
             opt.zero_grad(set_to_none=True)
         if phase2:
-            level_opt.step()
-            level_opt.zero_grad(set_to_none=True)
+            if rate:
+                # learnable per-attribute levels only under rate pressure (D);
+                # with D off the levels stay frozen on the annealed schedule.
+                level_opt.step()
+                level_opt.zero_grad(set_to_none=True)
             mu_opt.step()
             mu_opt.zero_grad(set_to_none=True)
 
         # ---- lambda adaptation (every 250 steps, Phase 2 only) ----
-        if phase2 and step % 250 == 0:
+        if phase2 and rate and step % 250 == 0:
             with torch.no_grad():
                 r_b = (rate_real / budget_bytes).item()
                 if lambda_mode == "dual":
@@ -647,7 +660,7 @@ def train_joint(
             }
             history.append(row)
             # C: online R-D marginal probe (from 1000 steps into Phase 2 on)
-            if step >= warmup + 1000:
+            if probe and step >= warmup + 1000:
                 mres = probe_marginal(
                     splats, schedule, c2w, Ks, width, height, images, val_idcs,
                     device, antialiased, sh_degree, bkgd, ch, budget_bytes, calib,
@@ -672,7 +685,7 @@ def train_joint(
             # dual-ascent real anchor: re-point lambda at the TRUE probed bytes
             # once per probe interval (the surrogate updates above are 4x more
             # frequent and only calibrated; this one uses the ground truth).
-            if lambda_mode == "dual":
+            if rate and lambda_mode == "dual":
                 with torch.no_grad():
                     excess_r = real_b / budget_bytes - 1.0
                     lam.add_(lambda_eta * excess_r)
@@ -1021,6 +1034,22 @@ def main(argv=None):
         help="freeze the Gaussian-count schedule at this step (e.g. 27000). "
              "Default None = anneal all the way to steps.",
     )
+    ap.add_argument(
+        "--ablate-a", action="store_true",
+        help="ablation: turn OFF quantization-aware forward (A). Phase 2 trains "
+             "on the continuous representation; quantization happens only at "
+             "landing (post-hoc).",
+    )
+    ap.add_argument(
+        "--ablate-d", action="store_true",
+        help="ablation: turn OFF the Lagrangian rate term + dual ascent (D). "
+             "Learnable per-attribute levels are frozen on the annealed schedule "
+             "to the fixed init_targets allocation.",
+    )
+    ap.add_argument(
+        "--ablate-c", action="store_true",
+        help="ablation: turn OFF the online marginal-benefit probe (C).",
+    )
     args = ap.parse_args(argv)
     train_joint(
         args.scene, args.scene_name, args.out_dir, steps=args.steps,
@@ -1029,6 +1058,7 @@ def main(argv=None):
         factor=args.factor, position_noise=not args.no_position_noise,
         lambda_mode=args.lambda_mode, lambda_eta=args.lambda_eta,
         n_hold_step=args.n_hold_step,
+        qat=not args.ablate_a, rate=not args.ablate_d, probe=not args.ablate_c,
     )
 
 
